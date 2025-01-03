@@ -1,0 +1,18 @@
+{
+	"parameters": [
+	{
+		"protocol": "modbusrtu",
+		"device": "COM6",
+		"baudRate": 9600,
+		"parity": "N",
+		"dataBits": 8,
+		"stopBits": 1,
+		"unitId": "1",
+		"fc": "fc3",
+		"registerStart": 0,
+		"registerLength": 2,
+		"format": "ABCD",
+		"value": true,
+		"interval": 1000
+	}
+]}
