@@ -1,6 +1,6 @@
-const SerialPort = require('serialport').SerialPort;
-const Modbus = require('jsmodbus');
-const dgram = require('dgram');
+const ModbusTCP = require('jsmodbus');
+const ModbusRTU = require('modbus-serial');
+
 const net = require('net');
 // const { parse } = require('path');
 
@@ -17,14 +17,14 @@ function getArg() {
 	}
 }
 
-function parseValue(resp, item) {
-	var registers = resp.response._body.valuesAsArray;
+function parseValue(buffer, item) {
+	// var registers = resp;
 	// Create a buffer of 4 bytes (32 bits). One word is 2 bytes
-	var buffer = Buffer.alloc(item.registerLength * 2);
+	// var buffer = Buffer.alloc(item.registerLength * 2);
 
-	for (var i = 0; i < registers.length; i++) {
-		buffer.writeUInt16BE(registers[i], i * 2);
-	}
+	// for (var i = 0; i < registers.length; i++) {
+	// 	buffer.writeUInt16BE(registers[i], i * 2);
+	// }
 
 	if (item.format !== 'ABCD') {
 		var floatValue = buffer.readFloatLE(0);
@@ -45,7 +45,7 @@ function modbusTask(client, item) {
 			// read holding register
 			client.readHoldingRegisters(item.registerStart, item.registerLength)
 				.then(resp => {
-					parseValue(resp, item);
+					parseValue(resp.response._body._valuesAsBuffer, item);
 				})
 				.catch(err => {
 					item.status = "ERROR";
@@ -54,7 +54,7 @@ function modbusTask(client, item) {
 		} else if (item.fc.toUpperCase() === "FC4") {
 			// read input register
 			client.readInputRegisters(item.registerStart, item.registerLength)
-				.then(resp => parseValue(resp, item))
+				.then(resp => parseValue(resp.buffer, item))
 				.catch(err => {
 					item.status = "ERROR";
 					console.error('Error reading input registers:');
@@ -79,42 +79,19 @@ function modbusTask(client, item) {
 
 // Function to process Modbus RTU
 function processModbusRTU(item) {
-	const serialPort = new SerialPort({
+	// SerialPort.Binding = Binding;
+	const options = {
 		path: item.device,
 		baudRate: item.baudRate,
 		parity: item.parity,
 		stopBits: item.stopBits,
 		dataBits: item.dataBits,
-		endOnClose: true, 
-		autoOpen: true
-	});
+	};
 
-	serialPort.on('open', function () {
-        console.log('Serial port opened');
-		const client = new Modbus.client.RTU(serialPort, item.unitId);
+	const client = new ModbusRTU(options);
+	client.setID(item.unitId);
+	client.connectRTU(item.device, options, () => {
 		modbusTask(client, item);
-		// 	// Set a timeout for the serial port
-		// 	// timeout = setTimeout(() => {
-		// 	// 	// console.error('Serial port timeout');
-		// 	// }, item.interval);
-    });
-
-	serialPort.on('data',  (data)=> {
-		console.log('Data received', data);
-		// Reset the timeout on data received
-		// clearTimeout(timeout);
-		// timeout = setTimeout(() => {
-		// 	// console.error('Serial port timeout');
-		// 	// serialPort.close();
-		// }, item.interval);
-	});
-
-	serialPort.on('error',  (err) =>{
-		console.error('Error: ', err.message);
-	});
-
-	serialPort.on('close', function () {
-		console.log('Serial port closed');
 	});
 }
 
@@ -124,7 +101,7 @@ function processModbusRTU(item) {
  */
 function processModbusTCP(item) {
 	var socket = new net.Socket();
-	var client = new Modbus.client.TCP(socket);
+	var client = new ModbusTCP.client.TCP(socket);
 	var options = {
 		'host': item.host,
 		'port': item.port,

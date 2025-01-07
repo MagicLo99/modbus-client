@@ -12,6 +12,7 @@
   "dependencies": {
     "dgram": "^1.0.1",
     "jsmodbus": "^4.0.10",
+    "modbus-serial": "^8.0.17",
     "net": "^1.0.2",
     "serialport": "^13.0.0"
   }
