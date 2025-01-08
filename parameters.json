@@ -9,7 +9,8 @@
 			"registerStart": 0,
 			"registerLength": 2,
 			"format": "ABCD",
-			"interval": 1000
+			"interval": 1000,
+			"evaluatation": "(value -2) * 100"
 		}
 	]
 }

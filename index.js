@@ -4,9 +4,10 @@ const ModbusRTU = require('modbus-serial');
 const net = require('net');
 // const { parse } = require('path');
 
+
 /**
- * Get argument from command line argument
- * @returns {String} Argument
+ * Get the first argument from the command line
+ * @returns {String} The first argument, an empty string if no argument is provided
  */
 function getArg() {
 	const argument = process.argv[2];
@@ -17,67 +18,94 @@ function getArg() {
 	}
 }
 
+/**
+ * Parse the Modbus response buffer to a float value
+ * @param {Buffer} buffer - Modbus response buffer
+ * @param {Object} item - Item object from configuration
+ * @returns {Number} Float value
+ */
 function parseValue(buffer, item) {
-	// var registers = resp;
-	// Create a buffer of 4 bytes (32 bits). One word is 2 bytes
-	// var buffer = Buffer.alloc(item.registerLength * 2);
+	const format = item.format;
+	var floatValue =  0.0;
 
-	// for (var i = 0; i < registers.length; i++) {
-	// 	buffer.writeUInt16BE(registers[i], i * 2);
-	// }
-
-	if (item.format !== 'ABCD') {
-		var floatValue = buffer.readFloatLE(0);
+	if (format !== 'ABCD') {
+		// Read float value from buffer (little-endian)
+		floatValue = buffer.readFloatLE(0);
 	} else {
 		// default is ABCD
-		// Convert buffer to float (big-endian)
-		var floatValue = buffer.readFloatBE(0);
-		
+		// Read float value from buffer (big-endian)
+		floatValue = buffer.readFloatBE(0);
 	}
 
-	console.log(floatValue);
+	const stringValue = floatValue.toString();
+	var str = item.evaluatation;
+	str = str.replaceAll('value', stringValue);
+	// Set the status of the item to "OK"
 	item.status = "OK";
+
+	return eval(str);
 }
 
+
+/**
+ * Perform Modbus task according to the item configuration
+ * @param {Object} client - Modbus client object
+ * @param {Object} item - Item object from configuration
+ */
 function modbusTask(client, item) {
-	interval = setInterval(() => {
+	// Set interval to perform Modbus task
+	const interval = setInterval(() => {
+		// Check the function code of the item
 		if (item.fc.toUpperCase() === "FC3") {
-			// read holding register
+			// Read holding register
 			client.readHoldingRegisters(item.registerStart, item.registerLength)
 				.then(resp => {
-					parseValue(resp.response._body._valuesAsBuffer, item);
+					// Parse the response buffer to a float value
+					const val = parseValue(resp.response._body._valuesAsBuffer, item);
+					console.log(val);
 				})
 				.catch(err => {
+					// Set the status of the item to "ERROR" if there is an error
 					item.status = "ERROR";
 					console.error('Error reading holding registers:', err.message);
 				});
 		} else if (item.fc.toUpperCase() === "FC4") {
-			// read input register
+			// Read input register
 			client.readInputRegisters(item.registerStart, item.registerLength)
-				.then(resp => parseValue(resp.buffer, item))
+				.then((resp) => {
+					const val = parseValue(resp.buffer, item);
+					console.log(val);
+				})
 				.catch(err => {
+					// Set the status of the item to "ERROR" if there is an error
 					item.status = "ERROR";
 					console.error('Error reading input registers:');
 				});
 		} else if (item.fc.toUpperCase() === "FC5") {
-			// write single coil
+			// Write single coil
 			client.writeSingleCoil(item.registerStart, item.value)
 				.then(resp => {
+					// Set the status of the item to "OK" if the write is successful
 					item.status = "OK";
 				})
 				.catch(err => {
+					// Set the status of the item to "ERROR" if there is an error
 					item.status = "ERROR";
 					console.error('Error writing single coil:');
 				});
-		};
-		if (item.interval === 0){
+		}
+		// If the interval is set to 0, close the client and clear the interval
+		if (item.interval === 0) {
 			client.close();
 			clearInterval(interval);
 		} 
 	}, item.interval);
 }
 
-// Function to process Modbus RTU
+/**
+ * Process Modbus RTU protocol
+ * @param {Object} item - Item object from configuration
+ */
 function processModbusRTU(item) {
 	// SerialPort.Binding = Binding;
 	const options = {
@@ -88,12 +116,17 @@ function processModbusRTU(item) {
 		dataBits: item.dataBits,
 	};
 
+	// Create a Modbus RTU client
 	const client = new ModbusRTU(options);
 	client.setID(item.unitId);
+
+	// Connect to the device
 	client.connectRTU(item.device, options, () => {
+		// Start the Modbus task
 		modbusTask(client, item);
 	});
 }
+
 
 /**
  * Process Modbus TCP protocol
